@@ -7,6 +7,8 @@ import requests
 import time
 import json
 import re
+import random
+import multiprocessing
 import yaml
 import traceback  # Import the traceback module
 
@@ -18,13 +20,23 @@ headers_get = {'accept': 'application/json'}
 headers_post = {'accept': 'application/json', 'Content-Type': 'text/plain'}
 
 # API base URL
-net_ckan_node = "http://aur-1696583402-proxy-1:8080"
+net_ckan_node = "http://aur-1697811164_proxy_1:8080"
 base_url = f"{net_ckan_node}/api/discovery"
 base_url_post = f"{net_ckan_node}/api/discovery/remote/semantic"
 
 # Variables to access the ckan api
 ckan_url = os.getenv('CKAN_SITE_URL')
 ckan_key = os.getenv('CKAN_API_KEY')
+
+
+
+
+import logging
+
+logging.basicConfig(filename='app.log', level=logging.INFO,
+                    format='%(asctime)s [%(threadName)s] %(levelname)s: %(message)s')
+
+
 
 
 
@@ -48,11 +60,11 @@ def make_api_request(url, headers, method="GET", payload=None):
             return response.json()
 
     except requests.Timeout:
-        print(f"Timeout error for request {url}")
+        logging.error(f"Timeout error for request {url}")
     except requests.TooManyRedirects:
-        print(f"TooManyRedirects error for request {url}")
+        logging.error(f"TooManyRedirects error for request {url}")
     except requests.RequestException as e:
-        print(
+        logging.error(
             f"An error occurred while making the API request to {url}: {e}")
 
     return None
@@ -76,7 +88,7 @@ def get_community_ids(base_url, headers):
                         for community in response['message']]
         return community_ids
     else:
-        print("Failed to obtain Community IDs")
+        logging.error("Failed to obtain Community IDs")
         return []
 
 
@@ -86,9 +98,9 @@ def get_comunities():
     community_ids = get_community_ids(net_ckan_node, headers_get)
 
     if community_ids:
-        print(f"Community IDs obtained: {community_ids}")
+        logging.error(f"Community IDs obtained: {community_ids}")
     else:
-        print("No Community IDs obtained.")
+        logging.error("No Community IDs obtained.")
 
     return community_ids
 
@@ -114,6 +126,8 @@ def process_string(input_string):
 
     # Apply regular expression to remove unwanted characters
     processed_string = re.sub(r"[^a-z0-9\-_'']", "", processed_string)
+
+    logging.error(f"____3____ unique_id_string{processed_string}")
 
     return processed_string
 
@@ -142,7 +156,7 @@ def get_unique_ids(array):
             unique_ids.append(id_value)
             unique_id_strings.append(
                 "https://oeg.fi.upm.es/wothive/" + id_value)
-    print(f"Unique_id_string{unique_ids}")
+    logging.error(f"____2____ unique_id_string{unique_ids}")
 
     return unique_ids, unique_id_strings
 
@@ -153,12 +167,18 @@ def obtain_metadata(response):
     dataset_descriptions=[]
     organization_descriptions=[]
 
+    logging.error("----")
+    logging.error("ENTRA EN EL OBTAIN METADATA")
+    logging.error("----")
+    logging.error("The response es")
+    logging.error(response)
     organization_data = {
         'name': '',
         'title': '',
         'description': ''
     }
     
+
     # Check if the response contains 'bindings' and if 'bindings' is empty
     bindings = response.get('message', {}).get('results', {}).get('bindings', [])
     if not bindings:
@@ -216,7 +236,7 @@ def obtain_metadata(response):
             # Update dataset_data based on the triple and the information from the WoT TD
             if predicate == 'https://www.w3.org/2019/wot/td#title': #NAME
                 dataset_data['name'] = process_string(object_value)
-            if predicate == 'https://www.w3.org/2019/wot/td#title': #title
+            if predicate == 'https://www.w3.org/2019/wot/td#title': #tittle
                 dataset_data['title'] = object_value
             if predicate == 'https://www.w3.org/2019/wot/td#domain': #domain
                 dataset_data['domain'] = object_value
@@ -224,19 +244,36 @@ def obtain_metadata(response):
                 dataset_data['description'] = object_value
             if predicate == 'https://www.w3.org/2019/wot/td#url': #url
                 dataset_data['resources'][0]['url'] = object_value
-
+                
+                
+                
+                
+            # elif predicate == 'https://www.w3.org/2019/wot/td#serviceName': # RESOURCE - TITLE
+            #     dataset_data['title'] = object_value
+            #     dataset_data['resources'][0]['name'] = object_value
+            # elif predicate == 'https://www.w3.org/2019/wot/td#hasURL': #RESOURCE - URL
+            #     dataset_data['resources'][0]['url'] = object_value
             elif predicate == 'https://www.w3.org/2019/wot/td#provider': #OWNER ORG
                 dataset_data['owner_org'] = process_string(object_value)
                 organization_data['name'] = process_string(object_value)
                 organization_data['title'] = object_value
                 organization_data['description'] = str(object_value) + " description"
 
+            # if predicate == 'https://www.w3.org/2019/wot/td#serviceDescription': #DESCRIPTION
+            #     dataset_data['description'] = object_value
+            # elif predicate == 'https://www.w3.org/2019/wot/td#hasDomain':
+            #     dataset_data['domain'] = object_value
             elif predicate == 'https://www.w3.org/2019/wot/td#hasDomain':
                 dataset_data['groups'][0]['name'] = process_string(object_value)
 
         #append datasets and organization to a single dictionary   
         dataset_descriptions.append(dataset_data) 
         organization_descriptions.append(organization_data) 
+        
+        logging.error(f"__A__dataset_descriptions{dataset_descriptions}")
+        logging.error(f"__B__organization_descriptions{organization_descriptions}")
+        logging.error(f"__C__organization_data{organization_data}")
+        
    
     # Step 5: Return the list of datasets
     return dataset_descriptions, organization_descriptions
@@ -244,7 +281,8 @@ def obtain_metadata(response):
 
 
 def data_org(commId):
-    print("CommId: "+str(commId))
+    logging.error("base_url: "+str(base_url))
+    logging.error("commId: "+str(commId))
     # Request to obtain the AGIDs
     response_data = make_api_request(
         f"{base_url}/nodes/community/{commId}", headers_get)
@@ -256,18 +294,19 @@ def data_org(commId):
     list_organizations = []
 
     if response_data is not None:
-        print(f"Request to obtain the AGIDs: OK")
-
+        logging.error("____0____Request to obtain the AGIDs: OK")
+        logging.error("Print response data:")
+        logging.error(response_data)
         data = response_data
         messages = data.get('message', [])
 
-        # Iterate through each message to get the agid
+        # Iterar a través de cada mensaje para obtener el agid
         num_items=0
         for message in messages:
             agid = message.get('agid')
-            print(f"Processing AGID: {agid}")
+            logging.error(f"Processing AGID: {agid}")
 
-            # Make a new GET request for each agid
+            # Realizar una nueva solicitud GET para cada agid
             oids_data = make_api_request(
                 f"{base_url}/remote/semantic/predefined/getOids?agids={agid}", headers_get)
 
@@ -275,16 +314,18 @@ def data_org(commId):
                 oids_data = oids_data
                 bindings = oids_data.get('message', {}).get(
                     'results', {}).get('bindings', [])
-                
-                # Count and display the number of oids
+                logging.error("bindings: "+str(bindings))
+
+                # Contar y mostrar el número de oids
                 num_oids = len(bindings)
-                print(f"Number of OIDs: {num_oids}")
+                logging.error(f"Number of OIDs: {num_oids}")
 
                 # Extract and print the names of each oid
                 for binding in bindings:
+                    logging.error("Entra a bucle de OIDS")
                     oid_value = binding.get('oid', {}).get('value', '')
                     oid_name = binding.get('name', {}).get('value', '')
-                    print(f"OID: {oid_value}, Name: {oid_name}")
+                    logging.error(f"OID: {oid_value}, Name: {oid_name}")
 
                 # Realizar una solicitud POST para cada agid
                 query = '''
@@ -316,66 +357,75 @@ def data_org(commId):
                         resources_name = data["resources"][0]["name"]
                         resources_url = data["resources"][0]["url"]
 
-                        print(json.dumps(data, indent=4))
+                        logging.error(json.dumps(data, indent=4))
 
                     num_items = len(datasets)
 
-                    # print(f"POST response for agid {agid}: {post_data}")
+                    # logging.error(f"POST response for agid {agid}: {post_data}")
 
             else:
-                print(f"Failed to fetch OIDs for agid {agid}")
+                logging.error(f"Failed to fetch OIDs for agid {agid}")
 
-        print(f"Total number of datasets: " + str(num_items))
+        logging.error(f"Total number of datasets: " + str(num_items))
 
     else:
-        print(f"Failed to fetch community data for commId {commId}")
+        logging.error(f"Failed to fetch community data for commId {commId}")
 
+    logging.error(f"datasets: {list_datasets}")
+    logging.error(f"organization: {list_organizations}")
     return list_datasets, list_organizations
-
 
 
 # _______________CREATE DATASETS ON CKAN______________
 
 def create_datasets_CKAN(organization_data, dataset_data):
+    logging.error("Entra a create_datasets_CKAN")
+    logging.error(f"organization_data: {organization_data}")
     
+
     # Connect with ckan
     ckan = ckanapi.RemoteCKAN(ckan_url, apikey=ckan_key)
 
-    print(f"CKAN_CREATE_DATASETS: dataset_data {dataset_data}")
+    logging.error(f"CKAN_CREATE_DATASETS: dataset_data {dataset_data}")
     # Manage organizations
     try:
         # Check if the organization exists
         if len(dataset_data) > 0:
+            logging.error(f"Dataset data: {dataset_data}")
             val = dataset_data['owner_org']
-            print(f"Value is: {val}")
+            logging.error(f"val is: {val}")
 
             ckan.action.organization_show(id=val)
-            print('Organization already exists!')
+            logging.error('____8____Organization already exists!')
             
 
     except ckanapi.NotFound:
         # If the organization doesn't exist, create it.
         try:
             if organization_data['name'] != '':
-                print(f"Try to create organization***")
+                logging.error(f"Try to create organization***")
+                logging.error(f"organization_data: {organization_data}")
                 ckan.action.organization_create(**organization_data)
-                print('Organization created successfully!')
+                logging.error('____9____Organization created successfully!')
         except Exception as e:
             error_traceback = traceback.format_exc()  # Get the traceback of the exception
-            print(f"An error occurred creation of the  dataset: {e}\n{error_traceback}")  
-            print('Organization wasnt created because it exists!!')
+            logging.error(f"An error occurred creation of the  dataset: {e}\n{error_traceback}")  
+            logging.error('Organization wasnt created because it exists!!')
+    # except ValidationError as e:
+    #     logging.error('____10____Failed to create organization:', e)
 
     # Create a new dataset on CKAN
     try:
         # If it does note exists, create it
-        print(f"Creating Dataset: ... {dataset_data}")
+        logging.error(f"Try to create dataset***")
+        logging.error(f"datasets_data: {dataset_data}")
         ckan.action.package_create(**dataset_data)
-        print('Dataset created successfully')
+        logging.error('____11____Dataset created successfully')
     except ckanapi.errors.ValidationError:
         # If it trows an error, it means that the dataset already exists. Do nothing.
-        print('Dataset already exists')
+        logging.error('____12____Dataset already exists')
     except Exception as e:
-        print('Failed to create dataset: %s', e)
+        logging.error('____13____Failed to create dataset: %s', e)
 
     return dataset_data
 
@@ -393,8 +443,9 @@ def delete_dataset_CKAN(dataset_name, confirmation_count):
     - None
     """
     if confirmation_count < 3:
-        print(f"The deletion confirmation for dataset {dataset_name} is insufficient.")
+        logging.error(f"The deletion confirmation for dataset {dataset_name} is insufficient.")
         return
+        
 
     # Create a CKAN API client
     ckan = ckanapi.RemoteCKAN(ckan_url, apikey=ckan_key)
@@ -402,10 +453,10 @@ def delete_dataset_CKAN(dataset_name, confirmation_count):
     try:
         # Delete the dataset
         ckan.action.package_delete(id=dataset_name)
-        print(f"Dataset '{dataset_name}' deleted from CKAN.")
+        logging.error(f"____17____Dataset '{dataset_name}' deleted from CKAN.")
     except ckanapi.CKANAPIError as e:
-        print(f"An error occurred while deleting dataset '{dataset_name}': {e}")
-
+        logging.error(
+            f"____18____An error occurred while deleting dataset '{dataset_name}': {e}")
 
 def load_counter():
     try:
@@ -413,43 +464,42 @@ def load_counter():
             return yaml.safe_load(file)
     except FileNotFoundError:
         return {}
-    
 
 def save_counter(counter):
     with open('counter.yaml', 'w') as file:
         yaml.safe_dump(counter, file)
-        
-        
 # ______________UPDATE DATASETS ON CKAN BASED ON THE REGISTERED ITEMS IN THE NODES______________
 
 def update_datasets(commId):
     confirmation_dict = load_counter()
-    print("Updating datasets ***")
+    logging.error("Entra a update_datasets")
 
     existing_datasets = get_ckan_datasets()
 
     # Create a list of existing dataset names
-    print("__Existing dataset names: " + str(existing_datasets))
+    logging.error("____19____Existing dataset names: " + str(existing_datasets))
 
     datasets, organizations = data_org(commId)
 
 
     # Flatten the datasets list to get all dictionaries in one list
     flattened_datasets = [data for sublist in datasets for data in sublist if isinstance(data, dict)]
+    logging.error(f"___***___flattened_datasets: {flattened_datasets}")
     
     current_datasets = set([data['name'] for data in flattened_datasets])
 
     # Check if the dataset exists in CKAN and delete if not found in the obtained results
     for dataset_name in existing_datasets:
         if dataset_name not in current_datasets:
-            print(f"Dataset '{dataset_name}' not found in the obtained results. Marking for potential deletion...")
+            logging.error(f"____20____Dataset '{dataset_name}' not found in the obtained results. Marking for potential deletion...")
             
             confirmation_dict[dataset_name] = confirmation_dict.get(dataset_name, 0) + 1
-            print(f"__COUNT__confirmation_dict: {confirmation_dict}")
+            logging.error(f"__COUNT__confirmation_dict: {confirmation_dict}")
             print(f"__COUNT__confirmation_dict: {confirmation_dict}")
             
+            
             if confirmation_dict[dataset_name] >= 3:
-                print(f"The deletion confirmation for the dataset {dataset_name} is sufficient. Deleting...")
+                logging.error(f"The deletion confirmation for the dataset {dataset_name} is sufficient. Deleting...")
                 delete_dataset_CKAN(dataset_name, confirmation_dict[dataset_name])
                 confirmation_dict[dataset_name] = 0  # Reset the counter
         else:
@@ -457,15 +507,21 @@ def update_datasets(commId):
             confirmation_dict[dataset_name] = 0
 
     save_counter(confirmation_dict)
-    print("Dataset deletion completed.")
+    logging.error("____21____Dataset deletion completed.")
 
+    logging.error("datasets: "+str(datasets))
+    logging.error("organizations: "+str(organizations))
     # #For every dataset obtained from the query to the community, call to the funtion create_datasets_CKAN to create the datasets on CKAN
     for data, orga in zip(datasets, organizations):
-
+        logging.error("data: "+str(data))
+        logging.error("orga: "+str(orga))
         # Check if the sublists are not empty
         if data != []:
             for data_sub,org_sub in zip(data,orga):
            
+                logging.error("data_sub: "+str(data_sub))
+                logging.error("org_sub: "+str(org_sub))
+
                 create_datasets_CKAN(org_sub, data_sub)
         else:
             print("The list is empty.")
@@ -484,23 +540,29 @@ def get_ckan_datasets():
     - The list of datasets names retrieved from the CKAN database.
     """
     # Create a CKAN API client
+    logging.error(f"ckan: {ckan_url} {ckan_key}")
 
     ckan = ckanapi.RemoteCKAN(ckan_url, apikey=ckan_key)
 
     try:
         # Retrieve the list of datasets
         datasets = ckan.action.package_list()
-        print(f"Retrieves the List of CKAN Datasets: {datasets}")
+        # logging.error(datasets)
+        logging.error(f"RECUPERA LA LISTA DE DATASETS CKAN ___{datasets}")
         return datasets
 
     except ckanapi.NotFound:
-        print("CKAN instance not found.")
+        logging.error("____14____CKAN instance not found.")
     except ckanapi.NotAuthorized:
-        print("Not authorized to access CKAN API.")
+        logging.error("____15____Not authorized to access CKAN API.")
     except ckanapi.CKANAPIError:
-        print("An error occurred while retrieving datasets.")
+        logging.error("____16____An error occurred while retrieving datasets.")
 
     return []
+
+     
+
+
 
 
 
@@ -511,11 +573,13 @@ class AuroralIntegrationPlugin(plugins.SingletonPlugin):
 
     # IPluginObserver
     def update_config(self, config_):
-        print("Update config CKAN...")
+        logging.error("update config")
         toolkit.add_template_directory(config_, 'templates')
         toolkit.add_public_directory(config_, 'public')
         toolkit.add_resource('fanstatic', 'auroral_integration')
         
+
+
 
 
 def get_or_create_yaml(file_path):
@@ -535,62 +599,64 @@ def get_or_create_yaml(file_path):
     return data
 
 
-
 def updateControl(data):
     try:
         with open(file_path, 'w') as file:
             yaml.dump(data, file)
     except PermissionError:
         # Handle the permission error
-        print("Permission error occurred while saving control.yaml")
+        logging.error("Permission error occurred while saving control.yaml")
     except Exception as e:
         # Handle other exceptions
-        print(f"An error occurred while saving control.yaml: {e}")
+        logging.error(f"An error occurred while saving control.yaml: {e}")
 
 
 def executeUpdate():
 
 
-    print(f"Value yaml is:{control['val']}")
-    print("Scheduler started ***")
+    logging.error('COMIENZA EL HILO DE EJECUCION')
+    logging.error(f"El valor yml es:{control['val']}")
+  
+        
+    logging.error("_____________________Scheduler started")
 
 
     time.sleep(2) #Espero que el servidor inicie
     
-    print('START RUNNING THREAD EXECUTION')
+    logging.error('Comienza HILO EJECUCION')
     
     commIds = None
     
    
-    print('The comminity id is:'+str(commIds))
+    logging.error('Te comminity id is:'+str(commIds))
     if commIds == None:            
         commIds = get_comunities()
     
-    print('The comminity id 2 is:'+str(commIds))
+    logging.error('Te comminity id 2 is:'+str(commIds))
 
     for commId in commIds:
         try:
             update_datasets(commId)
-            print("Updated datasets successfully. //")
+            logging.error("Updated datasets successfully.")
         except Exception as e:  # Catching all exceptions for this example
             error_traceback = traceback.format_exc()  # Get the traceback of the exception
-            print(f"An error occurred during dataset update: {e}\n{error_traceback}")  # Log the error along with its traceback
+            logging.error(f"An error occurred during dataset update: {e}\n{error_traceback}")  # Log the error along with its traceback
         
-    print("Sleeping for 60 seconds...")
+    logging.error("Sleeping for 60 seconds...")
     time.sleep(60)
 
     toolkit.enqueue_job(executeUpdate, rq_kwargs={"timeout": 900})
         
-    #print(f"Termina el hilo de ejecucion!!!")
+    #logging.error(f"Termina el hilo de ejecucion!!!")
 
 file_path = 'control.yaml'
 control = get_or_create_yaml(file_path) #Iniciate in 0 if dont exists
 if control["val"] == 0:
-    print(f"Send the process to the thread")
+    logging.error(f"Envia el proceso al hilo")
 
     # Using a large number to represent a long timeout (e.g., 15 min = 900 seg)
     toolkit.enqueue_job(executeUpdate, rq_kwargs={"timeout": 900})
 
-    print(f"Set value to 1")
+    logging.error(f"Set value to 1")
     data = {"val": 1}     
     updateControl(data)
