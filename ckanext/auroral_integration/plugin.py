@@ -263,7 +263,7 @@ def obtain_metadata(response):
             #     dataset_data['description'] = object_value
             # elif predicate == 'https://www.w3.org/2019/wot/td#hasDomain':
             #     dataset_data['domain'] = object_value
-            elif predicate == 'https://www.w3.org/2019/wot/td#hasDomain':
+            elif predicate == 'https://www.w3.org/2019/wot/td#domain':
                 dataset_data['groups'][0]['name'] = process_string(object_value)
 
         #append datasets and organization to a single dictionary   
