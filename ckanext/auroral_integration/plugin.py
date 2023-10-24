@@ -642,8 +642,8 @@ def executeUpdate():
             error_traceback = traceback.format_exc()  # Get the traceback of the exception
             logging.error(f"An error occurred during dataset update: {e}\n{error_traceback}")  # Log the error along with its traceback
         
-    logging.error("Sleeping for 60 seconds...")
-    time.sleep(60)
+    logging.error("Sleeping for 30 seconds...")
+    time.sleep(30)
 
     toolkit.enqueue_job(executeUpdate, rq_kwargs={"timeout": 900})
         
